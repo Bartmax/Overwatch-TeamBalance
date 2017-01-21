@@ -1,0 +1,390 @@
+﻿<html>
+<head>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0-alpha.6/css/bootstrap.min.css"
+          rel="stylesheet"
+          integrity="sha384-rwoIResjU2yc3z8GV/NPeZWAv56rSmLldC3R/AZzGRnGxQQKnKkoFVhFQhNUwEyJ"
+          crossorigin="anonymous">
+    <style>
+        .input-group-addon.selected {
+            background-color: red;
+        }
+        thead > tr >th+th {text-align:right;}
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-faded bg-primary">
+        <div class="container">
+            <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <span class="navbar-brand">Overwatch stream team balance</span>
+        </div>
+    </nav>
+        <h1></h1>
+    <main class="container">
+        <table class="table table-sm">
+            <thead>
+                <tr data-bind="foreach: teams">
+                    <th colspan="2" data-bind="text: name"></th>
+                </tr>
+            </thead>
+            <tbody data-bind="foreach: slots">
+                <tr>
+                    <!-- ko foreach: $data -->
+                    <!-- ko if: $index()%2 === 0 -->
+                    <th data-bind="css: {'bg-info': !suggestedSwap(), 'bg-danger': suggestedSwap}">
+                        <p>Player&nbsp;<span data-bind="text: id+1"></span></p>
+                    </th>
+                    <td>
+                        <div class="input-group">
+                            <input style="text-align:right" type="number" max="5000" step="10" class="form-control" data-bind="value: inputSkillRating, attr:{'tabindex': id+1}" />
+                            <!-- ko foreach: $root.skillRatings -->
+                            <span class="input-group-btn">
+                                <button class="btn btn-secondary" tabindex="-1" data-bind="css:{ 'btn-success': isSkillTier($parent)}, click:setSkillRating.bind($data, $parent), text: name" type="button">SkillTier</button>
+                            </span>
+                            <!-- /ko -->
+                            <span class="input-group-addon" data-bind="text: skillRating"></span>
+
+                        </div>
+                    </td>
+                    <!-- /ko -->
+                    <!-- ko ifnot: $index()%2 === 0 -->
+                    <td>
+                        <div class="input-group">
+                            <span class="input-group-addon" data-bind="text: skillRating"></span>
+                            <!-- ko foreach: $root.skillRatings -->
+                            <span class="input-group-btn">
+                                <button class="btn btn-secondary" tabindex="-1" data-bind="css:{ 'btn-success': isSkillTier($parent)}, click:setSkillRating.bind($data, $parent), text: name" type="button">SkillTier</button>
+                            </span>
+                            <!-- /ko -->
+                            <input class="form-control" type="number" max="5000" step="10" data-bind="value: inputSkillRating, attr:{'tabindex': id+7}" />
+                        </div>
+                    </td>
+                    <th data-bind="css: {'bg-info': suggestedSwap(), 'bg-danger': !suggestedSwap()}">
+                        <p>Player&nbsp;<span data-bind="text: id+1"></span></p>
+                    </th>
+                    <!-- /ko -->
+                    <!-- /ko -->
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr data-bind="foreach: teams">
+                    <!-- ko if: $index()%2 === 0 -->
+                    <th colspan="2">
+                        <span data-bind="text: name"></span> Team Average &rarr;
+                        <span data-bind="text: getAverageSkillRating()"></span>
+                    </th>
+                    <!-- /ko -->
+                    <!-- ko ifnot: $index()%2 === 0 -->
+                    <th colspan="2" style="text-align:right">
+                        <span data-bind="text: getAverageSkillRating()"></span>
+                        &larr; <span data-bind="text: name"></span> Team Average
+                    </th>
+                    <!-- /ko -->
+
+                </tr>
+            </tfoot>
+        </table>
+        <hr />
+        <section>
+            <h2>How it works?</h2>
+            <ol>
+                <li>Type all known skill rating of current players in lobby.</li>
+                <li>Suggested swaps will be shown with color different than it's current team.</li>
+            </ol>
+            <h5>Pro tips:</h5>
+            <ul>
+                <li>Calculations are done on the fly, so adjusting values should happen instantly.</li>
+                <li>It supports players without skill rating</li>
+                <li>
+                        Typing a value less than 50 on an input field will multiply the value * 100 for fast skill typing.<br />
+                </li>
+                <li>
+                    Values lowers than 50 are supported via prefixing it with 0. For example: 030
+                </li>
+                <li>Pressing on the skill tier will set the skill rating to it's average value. For example, gold = 2250</li>
+                <li>For convenience, this was authored as a single html file to allow save the html and host it anywhere.</li>
+                <li>You can also run it via file on disk using any modern browser <sup>internet connection may still be required</sup></li>
+            </ul>
+            <small>Copyright &copy; Bartmax - 2017</small>
+        </section>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"
+            integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
+            crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.1/knockout-min.js"
+            integrity="sha256-PX9zWVaICUCeklczWaS9DLBb9uGN7pCkCT0Kyz1elRo="
+            crossorigin="anonymous"></script>
+
+    <script>
+        function pad(num, size) {
+            var s = "00000" + num;
+            return s.substr(s.length - size);
+        }
+    </script>
+    <script>
+
+        function Team(name, players) {
+            var self = this;
+            self.name = name;
+            self.players = players;
+
+            self.getTotalSkillRating = function () {
+                var total = 0;
+                $.each(self.players, function () {
+                    var sr = parseInt(this.skillRating());
+                    if (sr > 0) {
+                        total += sr;
+                    }
+                })
+                return total;
+            }
+
+            self.getAverageSkillRating = function () {
+                var count = self.skillRatedPlayers().length;
+                var total = self.getTotalSkillRating()
+                return count === 0 ? 0 : Math.floor(total / count);
+            }
+
+            self.skillRatedPlayers = ko.computed(function () {
+                return ko.utils.arrayFilter(self.players, function (p) { return p.skillRating() > 0 });
+            });
+            self.noSkillRatedPlayers = ko.computed(function () {
+                return ko.utils.arrayFilter(self.players, function (p) { return parseInt(p.skillRating(), 10) === 0 });
+            })
+        }
+
+        function Player(id, sr) {
+            var self = this;
+            self.id = id;
+            self.sr = sr;
+            self.inputSkillRating = ko.observable(sr);
+
+            self.skillRating = ko.computed(function () {
+                validateInputSkillRating()
+                self.sr = getSkillRating();
+                return getSkillRating();
+            });
+
+            self.suggestedSwap = ko.observable(false);
+
+            self.swap = function () {
+                self.suggestedSwap(!self.suggestedSwap());
+            }
+
+            function validateInputSkillRating() {
+                var sr = parseInt(self.inputSkillRating(),10);
+                if (isNaN(sr)) {
+                    self.inputSkillRating('');
+                }
+                if (sr > 5000) {
+                    self.inputSkillRating(5000);
+                }
+                if (sr < 0) {
+                    self.inputSkillRating('');
+                }
+
+            }
+
+            function getSkillRating() {
+                var efectiveSkillRating = 0;
+                var inputSkillRating = parseInt(self.inputSkillRating(), 10);
+                console.log(inputSkillRating)
+                if (inputSkillRating.length < 3 && inputSkillRating <= 50) {
+                    efectiveSkillRating = inputSkillRating * 100;
+                } else {
+                    efectiveSkillRating = inputSkillRating || 0;
+                }
+                return pad(Math.floor(Math.min(efectiveSkillRating, 5000)), 4);
+            }
+        }
+
+        function SkillTier(short, min, max) {
+            var self = this;
+            self.name = short;
+            var min = min;
+            var max = max;
+            self.isSkillTier = function (player) {
+                return player.skillRating() >= min && player.skillRating() <= max;
+            }
+            self.setSkillRating = function (player) {
+                player.inputSkillRating(Math.ceil((max + min) / 2));
+            }
+        }
+        function TeamData(team) {
+            var skillRatingTotal = 0;
+            var players = [];
+            var rankedPlayersCount = 0;
+            for (var i = 0; i < team.players.length; i++) {
+                var player = team.players[i];
+                var playerSr = parseInt(player.skillRating(), 10);
+                if (playerSr > 0) {
+                    rankedPlayersCount++;
+                }
+                skillRatingTotal += playerSr
+                players.push({ isSwapped: player.suggestedSwap(), skillRating: playerSr });
+            }
+            return {
+                skillRatingTotal,
+                players,
+                rankedPlayersCount
+            }
+        }
+        function Game(teamNames, playerCount) {
+            var self = this;
+            self.skillRatings = [
+                new SkillTier('B', 1, 1499),
+                new SkillTier('S', 1500, 1999),
+                new SkillTier('G', 2000, 2499),
+                new SkillTier('P', 2500, 2999),
+                new SkillTier('D', 3000, 3499),
+                new SkillTier('M', 3500, 3999),
+                new SkillTier('GM', 4000, 5000),
+            ];
+
+            self.teams = [];
+            for (var i = 0; i < teamNames.length; i++) {
+                var team = CreateTeam(teamNames[i], playerCount);
+                self.teams.push(team);
+            }
+            self.slots = [];
+            for (var p = 0; p < playerCount; p++) {
+                var slot = [];
+                for (var t = 0; t < self.teams.length; t++) {
+                    var team = self.teams[t];
+                    slot.push(team.players[p]);
+                }
+                self.slots.push(slot);
+            }
+
+            self.needSwap = ko.observable(false);
+
+            self.balanceTeams = ko.computed(function () {
+                $.each(self.teams, function () {
+                    $.each(this.players, function () {
+                        this.suggestedSwap(false);
+                    })
+                });
+                var originalTeamA = self.teams[0];
+                var originalTeamB = self.teams[1];
+
+                var teamDataA = new TeamData(originalTeamA);
+                var teamDataB = new TeamData(originalTeamB);
+
+                // try three swaps.
+                for (var i = 0; i < Math.floor(self.slots.length/2); i++) {
+                    var swapData = testSwaps(teamDataA, teamDataB);
+                    if (!swapData.hasValidSwap) break;
+                    originalTeamA.players[swapData.ta].suggestedSwap(true);
+                    originalTeamB.players[swapData.tb].suggestedSwap(true);
+                    simulateSwap(teamDataA, teamDataB, swapData.ta, swapData.tb);
+                }
+
+            });
+
+            function simulateSwap(teamDataA, teamDataB, ta, tb) {
+                var playerASkillRating = teamDataA.players[ta].skillRating;
+                var playerBSkillRating = teamDataB.players[tb].skillRating;
+
+                if (playerASkillRating === 0) {
+                    teamDataA.rankedPlayersCount++
+                    teamDataB.rankedPlayersCount--
+                }
+                if (playerBSkillRating === 0) {
+                    teamDataA.rankedPlayersCount--
+                    teamDataB.rankedPlayersCount++
+                }
+
+                teamDataA.players[ta].isSwapped = true;
+                teamDataB.players[tb].isSwapped = true;
+
+                teamDataA.players[ta].skillRating = playerBSkillRating;
+                teamDataB.players[tb].skillRating = playerASkillRating;
+
+                teamDataA.skillRatingTotal = teamDataA.skillRatingTotal - playerASkillRating + playerBSkillRating;
+                teamDataB.skillRatingTotal = teamDataB.skillRatingTotal - playerBSkillRating + playerASkillRating;
+
+            }
+
+
+            function testSwap(teamSrA, teamSrB, playerSrA, playerSrB, validPlayersACount, validPlayersBCount) {
+                var currentNoSkillDifference = Math.abs(validPlayersACount - validPlayersBCount);
+                if (playerSrA === 0) {
+                    validPlayersACount++
+                    validPlayersBCount--
+                }
+                if (playerSrB === 0) {
+                    validPlayersACount--
+                    validPlayersBCount++
+                }
+                var newNoSkillDifference = Math.abs(validPlayersACount - validPlayersBCount)
+                var newTeamASr = teamSrA - playerSrA + playerSrB;
+                var newTeamBSr = teamSrB - playerSrB + playerSrA;
+
+                if (newNoSkillDifference > currentNoSkillDifference) {
+                    return 99999999999;
+                }
+                if (newNoSkillDifference < currentNoSkillDifference) {
+                    return -1;
+                }
+
+                validPlayersACount = validPlayersACount < 1 ? 1 : validPlayersACount;
+                validPlayersBCount = validPlayersBCount < 1 ? 1 : validPlayersBCount;
+                return Math.abs(newTeamASr / validPlayersACount - newTeamBSr / validPlayersBCount);
+            }
+
+            function testSwaps(teamA, teamB) {
+                var originalTeamValues = Math.abs(teamA.skillRatingTotal / Math.max(teamA.rankedPlayersCount,1) - teamB.skillRatingTotal / Math.max(teamB.rankedPlayersCount,1));
+                var previousSwapValue = originalTeamValues;
+                var swapData = { hasValidSwap: false };
+                for (var ta = 0; ta < teamA.players.length; ta++) {
+                    if (!teamA.players[ta].isSwapped) {
+                        for (var tb = 0; tb < teamB.players.length; tb++) {
+                            if (!teamB.players[tb].isSwapped) {
+                                var swapValue = testSwap(teamA.skillRatingTotal, teamB.skillRatingTotal, teamA.players[ta].skillRating, teamB.players[tb].skillRating, teamA.rankedPlayersCount, teamB.rankedPlayersCount);
+                                if (swapValue === -1 || (previousSwapValue-swapValue) > 25) {
+                                    previousSwapValue = swapValue;
+                                    swapData = { teamA, teamB, ta, tb, hasValidSwap: true };
+                                }
+                            }
+                        }
+                    }
+                }
+                return swapData;
+
+            }
+
+
+        }
+
+
+    </script>
+    <script>
+        function CreateTeam(name, playerCount) {
+            if (!playerCount > 0) return;
+            var players = [];
+            for (var i = 0; i < playerCount; i++) {
+                var player = new Player(i, '');
+                players.push(player);
+            };
+            return new Team(name, players);
+        }
+
+    </script>
+    <script>
+
+        function OverwatchViewModel() {
+            var game = new Game(['BLUE', 'RED'], 6);
+            return game;
+        };
+
+    </script>
+    <script>
+        $(function () {
+            var vm = new OverwatchViewModel();
+            ko.applyBindings(vm);
+        })
+    </script>
+</body>
+</html>
